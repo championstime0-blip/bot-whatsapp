@@ -8,7 +8,7 @@ from flask import Flask, request
 Z_API_ID = "3EC3280430DD02449072061BA788E473"
 Z_API_TOKEN = "34E8E958D060C21D55F5A3D8"
 CLIENT_TOKEN = "Ff1119996b44848dbaf394270f9933163S"
-GEMINI_API_KEY = "AIzaSyBk-o3SavAIAD06BdVWyVM8nYQ-rsYdY7w"
+GEMINI_API_KEY = "AIzaSyDuGUR_7z76h8njBGTD-LY8AOuN7Eb-Vlo"
 
 genai.configure(api_key=GEMINI_API_KEY)
 app = Flask(__name__)
@@ -109,6 +109,7 @@ if __name__ == "__main__":
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
+
 
 
 
