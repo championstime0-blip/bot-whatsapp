@@ -9,7 +9,7 @@ Z_API_TOKEN = "34E8E958D060C21D55F5A3D8"
 CLIENT_TOKEN = "Ff1119996b44848dbaf394270f9933163S"
 
 # ⚠️ COLE SUA NOVA CHAVE AQUI DENTRO DAS ASPAS 👇
-GEMINI_API_KEY = "AIzaSyDuGUR_7z76h8njBGTD-LY8AOuN7Eb-Vlo"
+GEMINI_API_KEY = "AIzaSyDMCS--PV7v_9sVJbpACPv_5yGUyhdHlWY"
 
 # Configuração da IA
 genai.configure(api_key=GEMINI_API_KEY)
@@ -78,6 +78,7 @@ def webhook():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
+
 
 
 
