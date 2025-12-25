@@ -37,7 +37,7 @@ def gerar_resposta_ia(phone, mensagem_usuario):
         
         if phone not in chat_sessions:
             # Usando modelo 'gemini-pro' que é mais compatível e evita erro 404
-            model = genai.GenerativeModel("gemini-1.5-flash")
+            model = genai.GenerativeModel("gemini-pro")
             chat_sessions[phone] = model.start_chat(history=[])
         
         prompt = f"Instrução: {PROMPT_SISTEMA}\n\nLead disse: {mensagem_usuario}"
@@ -78,6 +78,7 @@ def webhook():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
+
 
 
 
