@@ -8,7 +8,7 @@ from flask import Flask, request
 Z_API_ID = "3EC3280430DD02449072061BA788E473"
 Z_API_TOKEN = "34E8E958D060C21D55F5A3D8"
 CLIENT_TOKEN = "Ff1119996b44848dbaf394270f9933163S"
-GEMINI_API_KEY = "AIzaSyA1I6jyv5khrKFh7SgeqIlxypJo_coHnJM"
+GEMINI_API_KEY = "AIzaSyBk-o3SavAIAD06BdVWyVM8nYQ-rsYdY7w"
 
 genai.configure(api_key=GEMINI_API_KEY)
 app = Flask(__name__)
@@ -59,5 +59,6 @@ def webhook():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
+
 
 
