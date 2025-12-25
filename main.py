@@ -54,11 +54,62 @@ def webhook():
         requests.post(url, json=payload, headers=headers)
             
     return "ok", 200
+    import os
+import requests
+from flask import Flask, request
+
+# --- SEUS DADOS DA Z-API ---
+Z_API_ID = "3EC3280430DD02449072061BA788E473"
+Z_API_TOKEN = "34E8E958D060C21D55F5A3D8"
+CLIENT_TOKEN = "Ff1119996b44848dbaf394270f9933163S"
+
+app = Flask(__name__)
+
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    data = request.json or {}
+    
+    # Ignora mensagens enviadas por você mesmo
+    if data.get("fromMe") is True:
+        return "ok", 200
+
+    mensagem = data.get("text", {}).get("message")
+    phone = data.get("phone")
+
+    if mensagem and phone:
+        print(f"📩 RECEBIDO: {mensagem}", flush=True)
+        
+        # --- RESPOSTA SIMPLES (ECO) ---
+        texto_resposta = f"🤖 Teste OK! Recebi: {mensagem}"
+        
+        # Envia de volta para a Z-API
+        url = f"https://api.z-api.io/instances/{Z_API_ID}/token/{Z_API_TOKEN}/send-text"
+        headers = {
+            "Client-Token": CLIENT_TOKEN,
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "phone": phone,
+            "message": texto_resposta
+        }
+        
+        try:
+            r = requests.post(url, json=payload, headers=headers)
+            print(f"📤 STATUS Z-API: {r.status_code} | RETORNO: {r.text}", flush=True)
+        except Exception as e:
+            print(f"❌ ERRO DE CONEXÃO: {e}", flush=True)
+            
+    return "ok", 200
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
 
 # Configuração necessária para o Render (Ele define a porta automaticamente)
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
+
 
 
 
