@@ -52,6 +52,43 @@ Assim que as 5 perguntas forem respondidas e o lead se mostrar qualificado (poss
 """
 
 def gerar_resposta_ia(phone, mensagem_usuario):
+    # Usamos o modelo Lite que é mais estável para conversas longas
+    nome_modelo = "models/gemini-2.0-flash-lite"
+
+    # 1. Recupera ou cria o histórico na memória do servidor
+    if phone not in chat_sessions:
+        chat_sessions[phone] = [] # Lista vazia para novos leads
+
+    try:
+        model = genai.GenerativeModel(nome_modelo)
+        
+        # 2. Iniciamos o chat passando o HISTÓRICO REAL que salvamos
+        chat = model.start_chat(history=chat_sessions[phone])
+        
+        # 3. O Prompt agora é uma "Instrução de Verificação"
+        instrucao_contexto = f"""
+        INSTRUÇÕES:
+        - Você é o Pedro Lima da Microlins.
+        - CONSULTE o histórico de mensagens acima antes de responder.
+        - Se o lead JÁ RESPONDEU uma pergunta (ex: Cidade, Área de atuação), NÃO REPITA a pergunta.
+        - Avance para a próxima pergunta do roteiro de sondagem.
+        
+        ROTEIRO: 1.Cidade? -> 2.Área? -> 3.Prazo? -> 4.Capital?
+        
+        RESPOSTA ANTERIOR DO LEAD: {mensagem_usuario}
+        """
+
+        response = chat.send_message(instrucao_contexto)
+        
+        # 4. SALVAMOS O HISTÓRICO ATUALIZADO (Isso é o que evita a repetição)
+        # O 'chat.history' contém a conversa completa atualizada
+        chat_sessions[phone] = chat.history
+        
+        return response.text
+
+    except Exception as e:
+        print(f"Erro na IA: {e}")
+        return "Tive um pequeno problema técnico, mas já estou voltando. Pode repetir sua última resposta?"
     # ESTRATÉGIA 2025: Usar a versão LITE para ter mais cota gratuita
     modelos_candidatos = [
         "models/gemini-2.0-flash-lite", # <--- MAIOR COTA EM 2025
@@ -110,4 +147,5 @@ def webhook():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
+
 
