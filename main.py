@@ -1,59 +1,60 @@
-import os
-import google.generativeai as genai
-from flask import Flask, request, jsonify
+def gerar_resposta_ia(phone, mensagem_usuario):
+    """
+    Estratégia 2025:
+    1. Tenta o 2.0 Flash (Versão Estável com muita cota).
+    2. Tenta o 'latest' (Apelido genérico que o Google sempre mantém ativo).
+    3. Deixa o 2.5 pro final (Pois tem cota baixa de 20 msgs).
+    """
+    modelos_candidatos = [
+        "gemini-2.0-flash",       # <--- O CAMPEÃO (Estável em Dez/25)
+        "gemini-flash-latest",    # <--- O GENÉRICO (Sempre funciona)
+        "gemini-2.5-flash"        # <--- O NOVO (Cota Baixa - Só emergência)
+    ]
 
-app = Flask(__name__)
+    # Inicializa sessão se não existir
+    if phone not in chat_sessions:
+        chat_sessions[phone] = {'history': []}
 
-genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
+    prompt_completo = f"Instrução: {PROMPT_SISTEMA}\n\nLead disse: {mensagem_usuario}"
 
-# Nome técnico estável para evitar conflito de versão da API
-MODEL_NAME = "models/gemini-1.5-flash"
+    for nome_modelo in modelos_candidatos:
+        try:
+            print(f"🔄 Tentando modelo: {nome_modelo}...", flush=True)
+            
+            # ATENÇÃO: Alguns modelos precisam do prefixo 'models/'
+            if "models/" not in nome_modelo:
+                nome_modelo_full = f"models/{nome_modelo}"
+            else:
+                nome_modelo_full = nome_modelo
 
-generation_config = {
-    "temperature": 0.7,
-    "top_p": 0.95,
-    "top_k": 64,
-    "max_output_tokens": 1000,
-}
+            # Tenta instanciar (com e sem o prefixo 'models/' se der erro)
+            try:
+                model = genai.GenerativeModel(nome_modelo)
+            except:
+                model = genai.GenerativeModel(nome_modelo_full)
 
-SYSTEM_INSTRUCTION = """
-Você é o Consultor de Expansão da Microlins. Qualifique leads 2026 (Ecossistema 5 em 1).
-Pergunte na ordem: 1. Área de atuação | 2. Praça | 3. Prazo | 4. Lucro esperado | 5. Capital (R$ 200k).
-Seja direto e profissional.
-"""
+            chat = model.start_chat(history=chat_sessions[phone]['history'])
+            response = chat.send_message(prompt_completo)
+            
+            # Se deu certo, salva e retorna
+            chat_sessions[phone]['history'] = chat.history
+            return response.text
 
-model = genai.GenerativeModel(
-    model_name=MODEL_NAME,
-    generation_config=generation_config,
-    system_instruction=SYSTEM_INSTRUCTION
-)
+        except Exception as e:
+            erro_str = str(e)
+            
+            # Se for cota (429), espera um pouco
+            if "429" in erro_str:
+                print(f"⏳ Quota cheia no {nome_modelo}. Tentando outro...", flush=True)
+                time.sleep(1) 
+                continue 
+            
+            # Se for 404 (Não achou), pula
+            if "404" in erro_str or "not found" in erro_str.lower():
+                print(f"⚠️ {nome_modelo} não disponível. Pulando...", flush=True)
+                continue
+            
+            print(f"❌ Erro {nome_modelo}: {erro_str}", flush=True)
+            continue
 
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    data = request.get_json()
-    
-    # Extração segura da string de mensagem
-    user_message = ""
-    if data:
-        user_message = str(data.get('message', data.get('text', '')))
-
-    if not user_message.strip():
-        return jsonify({"status": "error", "message": "Mensagem vazia"}), 400
-
-    try:
-        # Gera o conteúdo diretamente usando a instrução de sistema
-        response = model.generate_content(user_message)
-        bot_reply = response.text
-
-        return jsonify({
-            "status": "success",
-            "reply": bot_reply
-        }), 200
-
-    except Exception as e:
-        print(f"❌ ERRO NA CHAMADA API: {str(e)}")
-        return jsonify({"status": "error", "reply": "Instabilidade momentânea. Tente em 1 min."}), 500
-
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
+    return "No momento nossos sistemas estão com alto volume. Tente em 1 minuto."
