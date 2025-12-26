@@ -65,34 +65,36 @@ Identifique no histórico o preenchimento dos seguintes pontos:
 chat_sessions = {}
 
 def gerar_resposta_ia(phone, mensagem_usuario):
-    try:
-        # --- DIAGNÓSTICO DE MODELOS (Dedo-Duro) ---
-        print("📋 LISTANDO MODELOS DISPONÍVEIS NA SUA CONTA:", flush=True)
-        modelos_ok = []
-        for m in genai.list_models():
-            if 'generateContent' in m.supported_generation_methods:
-                print(f"✅ DISPONÍVEL: {m.name}", flush=True)
-                modelos_ok.append(m.name)
-        
-        # Tenta usar o modelo Flash, mas se não tiver, pega o primeiro da lista
-        nome_modelo = "models/gemini-1.5-flash"
-        if nome_modelo not in modelos_ok and modelos_ok:
-            nome_modelo = modelos_ok[0] # Pega o primeiro que funcionar
-            print(f"⚠️ Trocando para modelo disponível: {nome_modelo}", flush=True)
+    # --- AQUI ESTAVA O ERRO ---
+    # Você deve ter colocado "gemini-2.5-flash". O CORRETO é "1.5".
+    modelos_candidatos = [
+        "gemini-1.5-flash",       # <--- CONFIRA SE ESTÁ ASSIM (1.5)
+        "gemini-1.5-pro",
+        "gemini-pro"
+    ]
 
-        if phone not in chat_sessions:
-            print(f"🧠 Conectando no modelo: {nome_modelo}", flush=True)
+    historico = get_chat_history_for_ai(phone)
+    prompt_completo = f"Instrução do Sistema: {PROMPT_SISTEMA}\n\nHistórico: (Contexto)\n\nLead: {mensagem_usuario}"
+
+    for nome_modelo in modelos_candidatos:
+        try:
+            print(f"🔄 Tentando modelo IA: {nome_modelo}...", flush=True)
             model = genai.GenerativeModel(nome_modelo)
-            chat_sessions[phone] = model.start_chat(history=[])
-        
-        prompt = f"Contexto: {PROMPT_SISTEMA}\nLead: {mensagem_usuario}"
-        response = chat_sessions[phone].send_message(prompt)
-        return response.text
+            chat = model.start_chat(history=historico)
+            response = chat.send_message(prompt_completo)
+            return response.text
 
-    except Exception as e:
-        erro = f"🚨 ERRO FATAL IA: {str(e)}"
-        print(erro, flush=True)
-        return erro # Manda o erro pro WhatsApp para a gente ler
+        except Exception as e:
+            # Se o Google mandar esperar (429), a gente espera 2 segundos e tenta o próximo
+            if "429" in str(e):
+                print(f"⏳ Google pediu tempo no {nome_modelo}. Tentando o próximo...", flush=True)
+                time.sleep(2)
+                continue
+            
+            print(f"⚠️ Erro no {nome_modelo}: {e}", flush=True)
+            continue
+
+    return "Estou com muitos atendimentos agora. Pode me chamar em 1 minuto?"
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -116,3 +118,4 @@ def webhook():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
+
