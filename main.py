@@ -8,8 +8,13 @@ Z_API_ID = "3EC3280430DD02449072061BA788E473"
 Z_API_TOKEN = "34E8E958D060C21D55F5A3D8"
 CLIENT_TOKEN = "Ff1119996b44848dbaf394270f9933163S"
 
-# COLE SUA CHAVE NOVA AQUI
-GEMINI_API_KEY = "AIzaSyDMCS--PV7v_9sVJbpACPv_5yGUyhdHlWY"
+# AGORA A MÁGICA: O código pega a chave escondida no Render
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+
+genai.configure(api_key=GEMINI_API_KEY)
+app = Flask(__name__)
+
+# ... (Mantenha o resto do código igual, com o PROMPT_SISTEMA e a lógica)
 
 genai.configure(api_key=GEMINI_API_KEY)
 app = Flask(__name__)
@@ -76,6 +81,7 @@ def webhook():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
+
 
 
 
