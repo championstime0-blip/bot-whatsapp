@@ -3,10 +3,18 @@ import json
 import time
 import requests
 import datetime
-import google.generativeai as genai
-from flask import Flask, request, render_template_string, redirect, url_for, session, flash
-from flask_sqlalchemy import SQLAlchemy
-from functools import wraps
+import google.generativeai as genai # <--- Certifique-se que esta linha existe
+# ... outros imports ...
+
+# ADICIONE ESTAS DUAS LINHAS AQUI 👇
+import importlib.metadata
+try:
+    versao = importlib.metadata.version("google-generativeai")
+    print(f"🛑 VERSÃO INSTALADA NO SERVIDOR: {versao}", flush=True)
+except:
+    print("🛑 NÃO FOI POSSÍVEL LER A VERSÃO", flush=True)
+
+# ... resto do código ...
 
 # ==================================================
 # 1. CONFIGURAÇÕES
@@ -336,6 +344,7 @@ def webhook():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
+
 
 
 
