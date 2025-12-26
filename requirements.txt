@@ -1,4 +1,6 @@
 flask
+flask_sqlalchemy
+flask_login
 gunicorn
 requests
 google-generativeai>=0.8.3
