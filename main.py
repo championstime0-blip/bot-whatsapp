@@ -14,86 +14,57 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 app = Flask(__name__)
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# Memória RAM para o histórico
+# Memória RAM para histórico
 chat_sessions = {}
 
-# --- PROCESSO DE SONDAGEM RÍGIDO ---
+# PROCESSO DE SONDAGEM RÍGIDO (Suas 5 Perguntas)
 PROMPT_SISTEMA = """
-Você é o Pedro Lima, consultor de expansão da Microlins. 
-Seu objetivo é qualificar o lead seguindo este roteiro de 6 perguntas.
-IMPORTANTE: Analise o histórico. Se a informação já foi dada, NÃO repita a pergunta.
-
-RESUMO SOBRE A MICROLINS: A franquia Microlins (Grupo MoveEdu) é a maior rede de ensino profissionalizante do Brasil. Para 2026, o foco é o modelo Ecossistema 5 em 1, 
-projetado para maximizar o faturamento de um único ponto comercial. O Conceito 5 em 1: Diferente de uma escola comum, a Microlins permite faturar com cinco frentes de 
-ensino sob o mesmo teto: Cursos Profissionalizantes (Informática, Administrativo, Saúde, Vendas), Inglês (Metodologia focada em conversão rápida), Cursos Técnicos 
-(Diplomas reconhecidos para inserção rápida no mercado), Graduação (Faculdades com selo de qualidade) e Pós-Graduação (Especialização para o público adulto).
-Números Médios: Investimento Inicial a partir de R$ 203.000,00 (pode variar conforme a praça), Prazo de Retorno (Payback) estimado entre 18 a 24 meses e Margem de Lucro 
-média de 25% a 35% sobre o faturamento bruto. Diferenciais Estratégicos: Marca Consolidada com mais de 30 anos de mercado e milhões de alunos formados, Suporte Total com 
-auxílio na escolha do ponto, treinamento de equipe e marketing centralizado, além da Baixa Ociosidade pelo mix de produtos que garante alunos de manhã, tarde e noite.
+Você é o Pedro Lima, consultor de expansão. Siga este roteiro RIGOROSAMENTE. 
+Analise o histórico: se o lead já respondeu, pule para a próxima. 
+NUNCA faça duas perguntas na mesma mensagem.
 
 ROTEIRO:
-1º (MENSAGEM) "🎉 Olá! Tudo bem? Sou o Pedro Lima, especialista de expansão da Microlins.
-
-Fiquei muito feliz com o seu interesse! Você acaba de dar o primeiro passo para se conectar à maior e mais premiada rede de educação profissionalizante do Brasil, com mais de 30 anos de história e parte do Grupo MoveEdu. 🚀💙
-
-O modelo 2025 da Microlins é um ecossistema 5 em 1 (Profissionalizante, Inglês, Técnico, Graduação e Pós), e para eu te enviar o projeto detalhado e a viabilidade financeira para a sua região, preciso confirmar dois pontos:
-
-📍 Em qual cidade você tem interesse em abrir a unidade? 
-⏱️ E qual o seu momento atual para esse investimento? 
-
-👉 Gostaria de inaugurar em até 90 dias (Curto prazo)
-👉 Planejando para o próximo semestre (Médio prazo)
-👉 Apenas pesquisando modelos e valores para o futuro
-
-Assim que você me responder, já te envio o Book 2025 e os números de faturamento!"
-2º (ÁREA DE ATUAÇÃO) "Legal nome, e me fala uma coisa, o Sr trabalha ou atua em qual área aí na sua cidade?"
-3º (PRAÇA DE INTERESSE) "Ah legal, e me outra coisa, e o negócio pretende montar é aí na sua cidade mesmo?"
-4º (PRAZO) "E esse negócio, você pretende abrir nos próximos 3 meses ou é algo mais a médio ou longo prazo? E o que seria médio ou longo prazo para o Sr?"
-5º (LUCRO) "E me fala uma coisa Sr, esse negócio, pra ser bom para o Sr, ele precisa dar quanto na última linha?"
-6º (CAPITAL DISPONÍVEL) "Legal Sr, para você ter uma ideia, a lucratividade está diretamente ao investimento. Qual valor você tem disponível para investir hoje?"
-
-REGRAS:
-- Uma pergunta por vez.
-- Tom profissional, direto e humano.
+1º (ÁREA DE ATUAÇÃO) "Legal Sr, e me fala uma coisa, o Sr trabalha ou atua em qual área aí na sua cidade?"
+2º (PRAÇA DE INTERESSE) "Ah legal, e me outra coisa, e o negócio pretende montar é aí na sua cidade mesmo?"
+3º (PRAZO) "E esse negócio, você pretende abrir nos próximos 3 meses ou é algo mais a médio ou longo prazo? E o que seria médio ou longo prazo para o Sr?"
+4º (O QUANTO ESPERA LUCRAR) "E me fala uma coisa Sr, esse negócio, pra ser bom para o Sr, ele precisa dar quanto na última linha?"
+5º (CAPITAL DISPONÍVEL) "Legal Sr, para você ter uma ideia, a lucratividade está diretamente ao investimento. Tem um monte de franquia dizendo que com apenas 10 mil o Sr vai lucrar 50. E isso não é uma verdade. Qual valor você tem disponível para investir hoje?"
 """
 
 def gerar_resposta_ia(phone, mensagem_usuario):
-    # MODELO ATUALIZADO DE 2025
-    MODELO = "gemini-3-flash-preview" # Ou "gemini-3-flash" se já estiver em GA
+    # Rodízio de modelos para garantir que o bot nunca pare
+    modelos_teste = ["gemini-2.0-flash", "gemini-3-flash-preview"]
 
     if phone not in chat_sessions:
         chat_sessions[phone] = []
 
-    try:
-        # Registra a fala do lead
-        chat_sessions[phone].append({"role": "user", "content": mensagem_usuario})
+    chat_sessions[phone].append({"role": "user", "content": mensagem_usuario})
+    
+    # Formata histórico
+    contents = [
+        types.Content(role=m["role"], parts=[types.Part.from_text(text=m["content"])]) 
+        for m in chat_sessions[phone][-8:]
+    ]
 
-        # Prepara o histórico estruturado para o Gemini 3
-        contents = []
-        for msg in chat_sessions[phone][-8:]: # Últimas 8 interações
-            contents.append(types.Content(role=msg["role"], parts=[types.Part.from_text(text=msg["content"])]))
-
-        # Chamada da API com Instrução de Sistema Nativa
-        response = client.models.generate_content(
-            model=MODELO,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=PROMPT_SISTEMA,
-                temperature=0.7
+    for model_name in modelos_teste:
+        try:
+            print(f"🔄 Tentando modelo: {model_name}...", flush=True)
+            response = client.models.generate_content(
+                model=model_name,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=PROMPT_SISTEMA,
+                    temperature=0.3
+                )
             )
-        )
+            resposta_texto = response.text
+            chat_sessions[phone].append({"role": "model", "content": resposta_texto})
+            return resposta_texto
+        except Exception as e:
+            print(f"⚠️ Erro no {model_name}: {e}", flush=True)
+            continue # Tenta o próximo modelo se der erro de cota
 
-        resposta_texto = response.text
-        
-        # Registra a resposta da IA no histórico
-        chat_sessions[phone].append({"role": "model", "content": resposta_texto})
-        
-        return resposta_texto
-
-    except Exception as e:
-        print(f"❌ Erro na IA: {e}", flush=True)
-        # Fallback simples caso a cota estoure
-        return "Sr, tive uma pequena instabilidade no sistema. Poderia me confirmar em qual área o Sr atua hoje?"
+    return "Sr, tivemos uma alta demanda. Me conte, o negócio é para sua cidade mesmo?"
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -104,21 +75,14 @@ def webhook():
     phone = data.get("phone")
 
     if msg and phone:
-        print(f"📩 Lead ({phone}): {msg}", flush=True)
         resp = gerar_resposta_ia(phone, msg)
-        
-        # Envio Z-API
         requests.post(
             f"https://api.z-api.io/instances/{Z_API_ID}/token/{Z_API_TOKEN}/send-text",
             json={"phone": phone, "message": resp}, 
             headers={"Client-Token": CLIENT_TOKEN, "Content-Type": "application/json"}
         )
-        print(f"🤖 Bot: {resp}", flush=True)
             
     return "ok", 200
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
-
-
+    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
