@@ -15,113 +15,72 @@ app = Flask(__name__)
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
+# Memória volátil (RAM)
 chat_sessions = {}
 
+# PROMPT COM LÓGICA DE MEMÓRIA
 PROMPT_SISTEMA = """
-# ROLE: Consultor Pedro Lima (Expansão Microlins).
-# MÉTODO: Sondagem Progressiva.
+Você é o Pedro Lima, consultor da Microlins.
+SEU OBJETIVO: Coletar 4 informações (Cidade, Área atual, Prazo e Capital).
 
-# COMPORTAMENTO:
-1. Analise o histórico de mensagens.
-2. Identifique quais dados você JÁ POSSUI:
-   - [ ] CIDADE
-   - [ ] ATUAÇÃO PROFISSIONAL
-   - [ ] PRAZO DE INVESTIMENTO
-   - [ ] CAPITAL DISPONÍVEL
-   - [ ] LUCRO ESPERADO
+REGRAS DE MEMÓRIA:
+1. Analise o histórico abaixo antes de perguntar.
+2. Se o lead já respondeu uma pergunta, PASSE PARA A PRÓXIMA.
+3. Não seja repetitivo. Se ele disse "Sou do Rio", não pergunte a cidade novamente.
 
-3. REGRAS CRÍTICAS:
-   - NUNCA pergunte algo que já consta no histórico.
-   - Se o lead deu duas informações na mesma frase (ex: "Sou de Salvador e trabalho com TI"), marque ambas como concluídas e passe para a pergunta de PRAZO.
-   - Seja humano e use conectores como: "Entendi", "Perfeito", "Sobre isso...", "Dando continuidade...".
-
-# OBJETIVO FINAL:
-Assim que todas as 4 informações forem coletadas, convide para uma reunião de apresentação do plano de lucros 2026.
+ORDEM DAS PERGUNTAS:
+1º Cidade? -> 2º Área de atuação? -> 3º Prazo (3 meses ou +)? -> 4º Capital disponível?
 """
 
 def gerar_resposta_ia(phone, mensagem_usuario):
-    # Usamos o modelo Lite que é mais estável para conversas longas
-    nome_modelo = "models/gemini-2.0-flash-lite"
-
-    # 1. Recupera ou cria o histórico na memória do servidor
-    if phone not in chat_sessions:
-        chat_sessions[phone] = [] # Lista vazia para novos leads
-
-    try:
-        model = genai.GenerativeModel(nome_modelo)
-        
-        # 2. Iniciamos o chat passando o HISTÓRICO REAL que salvamos
-        chat = model.start_chat(history=chat_sessions[phone])
-        
-        # 3. O Prompt agora é uma "Instrução de Verificação"
-        instrucao_contexto = f"""
-        INSTRUÇÕES:
-        - Você é o Pedro Lima da Microlins.
-        - CONSULTE o histórico de mensagens acima antes de responder.
-        - Se o lead JÁ RESPONDEU uma pergunta (ex: Cidade, Área de atuação), NÃO REPITA a pergunta.
-        - Avance para a próxima pergunta do roteiro de sondagem.
-        
-        ROTEIRO: 1.Cidade? -> 2.Área? -> 3.Prazo? -> 4.Capital?
-        
-        RESPOSTA ANTERIOR DO LEAD: {mensagem_usuario}
-        """
-
-        response = chat.send_message(instrucao_contexto)
-        
-        # 4. SALVAMOS O HISTÓRICO ATUALIZADO (Isso é o que evita a repetição)
-        # O 'chat.history' contém a conversa completa atualizada
-        chat_sessions[phone] = chat.history
-        
-        return response.text
-
-    except Exception as e:
-        print(f"Erro na IA: {e}")
-        return "Tive um pequeno problema técnico, mas já estou voltando. Pode repetir sua última resposta?"
-    # ESTRATÉGIA 2025: Usar a versão LITE para ter mais cota gratuita
+    # Mudança para modelos com maior probabilidade de cota disponível
     modelos_candidatos = [
-        "models/gemini-2.0-flash-lite", # <--- MAIOR COTA EM 2025
-        "models/gemini-2.0-flash-exp",
-        "models/gemini-flash-lite-latest"
+        "gemini-1.5-flash", # Modelo com maior cota gratuita (1500 req/dia)
+        "gemini-pro",       # Modelo estável clássico
+        "gemini-1.0-pro"    # Último recurso
     ]
 
     if phone not in chat_sessions:
-        chat_sessions[phone] = {'history': []}
-    
-    # Limita o histórico para as últimas 6 mensagens (evita erro de memória/tokens)
-    if len(chat_sessions[phone]['history']) > 6:
-        chat_sessions[phone]['history'] = chat_sessions[phone]['history'][-6:]
+        chat_sessions[phone] = []
+
+    # Mantém apenas as últimas 10 mensagens para não gastar tokens
+    historico_curto = chat_sessions[phone][-10:]
 
     for nome_modelo in modelos_candidatos:
         try:
-            print(f"🔄 Tentando modelo estável: {nome_modelo}...", flush=True)
+            print(f"🔄 Tentando {nome_modelo}...", flush=True)
             model = genai.GenerativeModel(nome_modelo)
-            chat = model.start_chat(history=chat_sessions[phone]['history'])
             
-            response = chat.send_message(f"{PROMPT_SISTEMA}\nLead: {mensagem_usuario}")
+            # Formata o histórico para a IA entender o contexto
+            contexto_com_historico = f"{PROMPT_SISTEMA}\n\nHistórico atual: {historico_curto}\n\nLead disse agora: {mensagem_usuario}"
             
-            chat_sessions[phone]['history'] = chat.history
-            return response.text
+            response = model.generate_content(contexto_com_historico)
+            resposta_texto = response.text
+
+            # Salva no histórico a troca de mensagens
+            chat_sessions[phone].append(f"Lead: {mensagem_usuario}")
+            chat_sessions[phone].append(f"Pedro: {resposta_texto}")
+            
+            return resposta_texto
 
         except Exception as e:
-            erro = str(e)
-            print(f"❌ Falha no {nome_modelo}: {erro}", flush=True)
-            if "429" in erro or "limit" in erro.lower():
-                time.sleep(2) # Espera o cooldown do Google
-                continue
+            print(f"❌ Erro no {nome_modelo}: {e}", flush=True)
+            if "429" in str(e):
+                continue # Tenta o próximo modelo
             continue
 
-    return "Oi! Recebi sua mensagem. Pode me dar um minutinho? Meu sistema de viabilidade está processando os dados de Salvador/região."
+    return "Oi! Recebi sua mensagem, mas estou processando algumas informações aqui. Pode me dar 1 minutinho e já te respondo?"
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.json or {}
-    if data.get("fromMe") is True: return "ok", 200
+    if data.get("fromMe"): return "ok", 200
 
     msg = data.get("text", {}).get("message")
     phone = data.get("phone")
 
     if msg and phone:
-        print(f"📩 Lead ({phone}): {msg}", flush=True)
+        print(f"📩 Lead: {msg}", flush=True)
         resp = gerar_resposta_ia(phone, msg)
         
         requests.post(
@@ -135,6 +94,3 @@ def webhook():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
-
-
-
