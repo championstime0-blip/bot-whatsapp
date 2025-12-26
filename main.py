@@ -4,9 +4,7 @@ import requests
 import google.generativeai as genai
 from flask import Flask, request
 
-# ==================================================
-# 1. CONFIGURAÇÕES
-# ==================================================
+# CONFIGURAÇÕES
 Z_API_ID = "3EC3280430DD02449072061BA788E473"
 Z_API_TOKEN = "34E8E958D060C21D55F5A3D8"
 CLIENT_TOKEN = "Ff1119996b44848dbaf394270f9933163S"
@@ -19,72 +17,51 @@ if GEMINI_API_KEY:
 
 chat_sessions = {}
 
-# ==================================================
-# 2. CÉREBRO (IA)
-# ==================================================
 PROMPT_SISTEMA = """
-# ROLE: Consultor Pedro Lima (Expansão Microlins - Grupo MoveEdu).
-# OBJETIVO: Qualificar lead para franquia Modelo 2026.
-# TONE: Profissional, breve e humano.
-
-# ROTEIRO (Uma pergunta por vez):
-1. Cidade de interesse?
-2. Área de atuação atual?
-3. Prazo de investimento (3 meses ou longo prazo)?
-4. Capital disponível (Investimento ~200k)?
+# ROLE: Consultor Pedro Lima (Expansão Microlins).
+# REGRA: Uma pergunta por vez. Curto e direto.
+1. Cidade?
+2. Área atual?
+3. Prazo (3 meses ou +)?
+4. Capital (Investimento 200k)?
 """
 
 def gerar_resposta_ia(phone, mensagem_usuario):
-    # ESTRATÉGIA FINAL: Usar os "Aliases" (Apelidos) do Google.
-    # "gemini-flash-latest" -> O Google escolhe o melhor Flash disponível para sua conta.
-    # "gemini-pro" -> O modelo clássico e estável.
+    # ESTRATÉGIA 2025: Usar a versão LITE para ter mais cota gratuita
     modelos_candidatos = [
-        "gemini-flash-latest", 
-        "gemini-pro-latest",
-        "gemini-pro"
+        "models/gemini-2.0-flash-lite", # <--- MAIOR COTA EM 2025
+        "models/gemini-2.0-flash-exp",
+        "models/gemini-flash-lite-latest"
     ]
 
     if phone not in chat_sessions:
         chat_sessions[phone] = {'history': []}
-
-    prompt_completo = f"Instrução: {PROMPT_SISTEMA}\n\nLead disse: {mensagem_usuario}"
+    
+    # Limita o histórico para as últimas 6 mensagens (evita erro de memória/tokens)
+    if len(chat_sessions[phone]['history']) > 6:
+        chat_sessions[phone]['history'] = chat_sessions[phone]['history'][-6:]
 
     for nome_modelo in modelos_candidatos:
         try:
-            print(f"🔄 Tentando conectar no alias: {nome_modelo}...", flush=True)
-            
-            # Tenta com o prefixo 'models/' para garantir
-            try:
-                model = genai.GenerativeModel(f"models/{nome_modelo}")
-            except:
-                model = genai.GenerativeModel(nome_modelo)
-
+            print(f"🔄 Tentando modelo estável: {nome_modelo}...", flush=True)
+            model = genai.GenerativeModel(nome_modelo)
             chat = model.start_chat(history=chat_sessions[phone]['history'])
-            response = chat.send_message(prompt_completo)
+            
+            response = chat.send_message(f"{PROMPT_SISTEMA}\nLead: {mensagem_usuario}")
             
             chat_sessions[phone]['history'] = chat.history
             return response.text
 
         except Exception as e:
             erro = str(e)
-            # Se for erro de Quota (429) ou Limite Zero
+            print(f"❌ Falha no {nome_modelo}: {erro}", flush=True)
             if "429" in erro or "limit" in erro.lower():
-                print(f"⏳ {nome_modelo} bloqueado/cheio. Tentando próximo...", flush=True)
-                time.sleep(1)
-                continue 
-            
-            if "404" in erro:
-                print(f"⚠️ {nome_modelo} não encontrado. Pulando...", flush=True)
+                time.sleep(2) # Espera o cooldown do Google
                 continue
-            
-            print(f"❌ Erro em {nome_modelo}: {erro}", flush=True)
             continue
 
-    return "No momento nossos sistemas estão em atualização. Tente em 1 minuto."
+    return "Oi! Recebi sua mensagem. Pode me dar um minutinho? Meu sistema de viabilidade está processando os dados de Salvador/região."
 
-# ==================================================
-# 3. WEBHOOK
-# ==================================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.json or {}
@@ -94,20 +71,14 @@ def webhook():
     phone = data.get("phone")
 
     if msg and phone:
-        print(f"📩 Lead: {msg}", flush=True)
-        
-        # Responde
+        print(f"📩 Lead ({phone}): {msg}", flush=True)
         resp = gerar_resposta_ia(phone, msg)
-        print(f"🤖 Bot: {resp}", flush=True)
         
-        try:
-            requests.post(
-                f"https://api.z-api.io/instances/{Z_API_ID}/token/{Z_API_TOKEN}/send-text",
-                json={"phone": phone, "message": resp}, 
-                headers={"Client-Token": CLIENT_TOKEN, "Content-Type": "application/json"}
-            )
-        except Exception as e:
-            print(f"❌ Erro Z-API: {e}", flush=True)
+        requests.post(
+            f"https://api.z-api.io/instances/{Z_API_ID}/token/{Z_API_TOKEN}/send-text",
+            json={"phone": phone, "message": resp}, 
+            headers={"Client-Token": CLIENT_TOKEN, "Content-Type": "application/json"}
+        )
             
     return "ok", 200
 
