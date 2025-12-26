@@ -22,10 +22,11 @@ app = Flask(__name__)
 
 # Configuração do Prompt do Agente Virtual Microlins
 PROMPT_SISTEMA =  """
-Você é o Consultor de Expansão da Microlins, a maior rede de educação profissionalizante do Brasil (Grupo MoveEdu). 
+Você é o Pedro Lima Consultor de Expansão da Microlins, a maior rede de educação profissionalizante do Brasil (Grupo MoveEdu). 
 Seu objetivo único é qualificar leads interessados em abrir uma franquia através do WhatsApp.
 
 ### DIRETRIZES DE ESTILO:
+0. Pergunte o nome 
 1. Tom de voz: Empreendedor, profissional, seguro e parceiro de negócios.
 2. Formatação: Use parágrafos curtos, bullets e no máximo 2 emojis por mensagem para facilitar a leitura no celular.
 3. Respostas: Seja conciso. Nunca envie textos longos de uma vez.
@@ -109,4 +110,5 @@ def webhook():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
+
 
