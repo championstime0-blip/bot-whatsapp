@@ -7,7 +7,17 @@ import google.generativeai as genai
 from flask import Flask, request, render_template_string, redirect, url_for, session
 from flask_sqlalchemy import SQLAlchemy
 from functools import wraps
+import google.generativeai as genai
+# ... outros imports ...
 
+# --- DIAGNÓSTICO DE VERSÃO ---
+try:
+    import importlib.metadata
+    v = importlib.metadata.version("google-generativeai")
+    print(f"🛑 VERSÃO DO GOOGLE INSTALADA: {v}", flush=True)
+except:
+    print("🛑 NÃO FOI POSSÍVEL LER A VERSÃO", flush=True)
+# -----------------------------
 # ==================================================
 # 1. CONFIGURAÇÕES
 # ==================================================
@@ -161,6 +171,7 @@ def dashboard():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
+
 
 
 
