@@ -32,7 +32,7 @@ média de 25% a 35% sobre o faturamento bruto. Diferenciais Estratégicos: Marca
 auxílio na escolha do ponto, treinamento de equipe e marketing centralizado, além da Baixa Ociosidade pelo mix de produtos que garante alunos de manhã, tarde e noite.
 
 ROTEIRO:
-1º (MENSAGEM) "🎉 Olá Tânia Jesus! Tudo bem? Sou o Pedro Lima, especialista de expansão da Microlins.
+1º (MENSAGEM) "🎉 Olá! Tudo bem? Sou o Pedro Lima, especialista de expansão da Microlins.
 
 Fiquei muito feliz com o seu interesse! Você acaba de dar o primeiro passo para se conectar à maior e mais premiada rede de educação profissionalizante do Brasil, com mais de 30 anos de história e parte do Grupo MoveEdu. 🚀💙
 
@@ -120,4 +120,5 @@ def webhook():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
+
 
