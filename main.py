@@ -43,20 +43,10 @@ Identifique no histórico o preenchimento dos seguintes pontos:
 
 # REGRAS DE RESPOSTA (API OUTPUT):
 - Responda apenas com texto pertinente à conversa, focando no próximo passo do SPIN Selling.
-- Não utilize emojis, não use listas de bolinhas, não use formatação visual.
 - Se algum critério de agendamento for atingido, finalize a resposta solicitando dia e hora para reunião por vídeo ou ligação rápida.
-- Mantenha o foco em Ensina Mais; ignore assuntos sobre Microlins.
 
-# FORMATO DA RESPOSTA:
-[Texto da resposta para o lead]
-
-Status da Sondagem:
-1. ATUACAO: [Preenchido/Pendente]
-2. PRACA: [Preenchido/Pendente]
-3. PRAZO: [Preenchido/Pendente]
-4. LUCRO: [Preenchido/Pendente]
-5. CAPITAL: [Preenchido/Pendente]
 """
+
 
 chat_sessions = {}
 
@@ -112,6 +102,7 @@ def webhook():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
+
 
 
 
