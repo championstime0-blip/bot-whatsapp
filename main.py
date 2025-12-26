@@ -1,100 +1,163 @@
 import os
+import json
+import time
 import requests
+import datetime
 import google.generativeai as genai
-from flask import Flask, request
+from flask import Flask, request, render_template_string, redirect, url_for, session
+from flask_sqlalchemy import SQLAlchemy
+from functools import wraps
 
-# --- CONFIGURAÇÕES ---
+# ==================================================
+# 1. CONFIGURAÇÕES
+# ==================================================
 Z_API_ID = "3EC3280430DD02449072061BA788E473"
 Z_API_TOKEN = "34E8E958D060C21D55F5A3D8"
 CLIENT_TOKEN = "Ff1119996b44848dbaf394270f9933163S"
 
-# AGORA A MÁGICA: O código pega a chave escondida no Render
+# Pega a chave do ambiente (Render)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
-genai.configure(api_key=GEMINI_API_KEY)
+ADMIN_USER = "pedro"
+ADMIN_PASS = "mudar123"
+
 app = Flask(__name__)
+app.secret_key = "segredo_absoluto_moveedu"
 
-# ... (Mantenha o resto do código igual, com o PROMPT_SISTEMA e a lógica)
+# Banco de Dados
+database_url = os.environ.get("DATABASE_URL", "sqlite:///leads.db")
+if database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
 
-genai.configure(api_key=GEMINI_API_KEY)
-app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
 
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+
+# ==================================================
+# 2. MODELO DE DADOS
+# ==================================================
+class Lead(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    phone = db.Column(db.String(50), unique=True, nullable=False)
+    name = db.Column(db.String(100), default="Lead")
+    status = db.Column(db.String(50), default="Novo") 
+    history = db.Column(db.Text, default="[]") 
+    last_interaction = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+with app.app_context():
+    db.create_all()
+
+# ==================================================
+# 3. CÉREBRO (LÓGICA BLINDADA)
+# ==================================================
 PROMPT_SISTEMA = """
 # ROLE: Consultor Pedro Lima (Expansão Ensina Mais Turma da Mônica).
-# MÉTODO: SPIN Selling. Objetivo: Agendar reunião de fechamento.
-# PERSONA: Consultor humano, direto e profissional. NUNCA mencione que é uma IA.
-# Primeira mensagem apos interação do lead: 
-🎉 Olá! Tudo bem? Sou o Pedro Lima, especialista de negócios da Ensina Mais Turma da Mônica.
-
-Fiquei muito feliz com o seu interesse! Você acaba de dar o primeiro passo para se conectar à única rede de educação licenciada pela Mauricio de Sousa Produções e que faz parte do Grupo MoveEdu, o maior do Brasil no setor. 🚀💙
-
-Para eu te enviar o projeto personalizado e verificar se a sua região ainda tem disponibilidade de praça, me confirma rapidinho:
-
-📍 Em qual cidade você pensa em abrir a unidade? 
-⏱️ E qual o seu momento atual? 
-👉 Gostaria de inaugurar em até 90 dias 
-👉 Planejando para o próximo semestre 
-👉 Apenas pesquisando valores e modelos
-
-Assim que você me responder, já te envio o material completo!
-
-# MATRIZ FINANCEIRA:
-- Modelo Center (>100k hab): R$ 147k total | Taxa R$ 36k.
-- Modelo Compacto (<100k hab): R$ 98k total | Taxa R$ 24k.
-- Lucro: 40% líquido.
-
-# VARIÁVEIS DE QUALIFICAÇÃO (Sondagem Interna):
-Identifique no histórico o preenchimento dos seguintes pontos:
-1. ATUACAO: Área profissional e perfil (investidor/operador).
-2. PRACA: Cidade de interesse e porte populacional.
-3. PRAZO: Momento de investimento (imediato/curto/longo).
-4. LUCRO: Expectativa de retorno financeiro mensal.
-5. CAPITAL: Disponibilidade de recurso para o modelo da praça.
-
-# PROTOCOLO DE AGENDAMENTO:
-- CRITÉRIO A: Se as 5 variáveis de qualificação forem identificadas.
-- CRITÉRIO B (PRIORITÁRIO): Se o lead declarar INTERESSE IMEDIATO e CAPITAL DISPONÍVEL (Pular sondagem).
-
-# REGRAS DE RESPOSTA (API OUTPUT):
-- Responda apenas com texto pertinente à conversa, focando no próximo passo do SPIN Selling.
-- Se algum critério de agendamento for atingido, finalize a resposta solicitando dia e hora para reunião por vídeo ou ligação rápida.
-
+# OBJETIVO: Qualificar lead para franquia.
+# ROTEIRO DE SONDAGEM:
+1. PRACA: Cidade e Estado de interesse?
+2. ATUACAO: Qual sua área de atuação hoje?
+3. PRAZO: Pretende abrir em até 90 dias ou médio/longo prazo?
+4. CAPITAL: Possui capital disponível para investimento?
+# REGRA: Uma pergunta por vez. Seja curto e profissional.
 """
 
-
-chat_sessions = {}
+# --- A FUNÇÃO QUE FALTAVA FOI REINSERIDA AQUI 👇 ---
+def get_chat_history_for_ai(phone):
+    """Recupera histórico do banco para contexto da IA"""
+    lead = Lead.query.filter_by(phone=phone).first()
+    history_ai = []
+    if lead:
+        try:
+            raw_history = json.loads(lead.history)
+            # Pega as últimas 10 trocas para não estourar limite
+            for msg in raw_history[-10:]:
+                role = "user" if msg['role'] == "user" else "model"
+                history_ai.append({"role": role, "parts": [msg['text']]})
+        except:
+            history_ai = []
+    return history_ai
 
 def gerar_resposta_ia(phone, mensagem_usuario):
-    # --- AQUI ESTAVA O ERRO ---
-    # Você deve ter colocado "gemini-2.5-flash". O CORRETO é "1.5".
+    # Lista CORRETA de modelos (Removido o 2.5 que não existe)
     modelos_candidatos = [
-        "gemini-1.5-flash",       # <--- CONFIRA SE ESTÁ ASSIM (1.5)
-        "gemini-1.5-pro",
+        "gemini-1.5-flash", 
+        "gemini-1.5-pro", 
         "gemini-pro"
     ]
 
+    # Chama a função que agora existe!
     historico = get_chat_history_for_ai(phone)
-    prompt_completo = f"Instrução do Sistema: {PROMPT_SISTEMA}\n\nHistórico: (Contexto)\n\nLead: {mensagem_usuario}"
+    prompt_completo = f"Instrução: {PROMPT_SISTEMA}\n\nHistórico: (Contexto)\n\nLead disse: {mensagem_usuario}"
 
     for nome_modelo in modelos_candidatos:
         try:
             print(f"🔄 Tentando modelo IA: {nome_modelo}...", flush=True)
+            
             model = genai.GenerativeModel(nome_modelo)
             chat = model.start_chat(history=historico)
+            
             response = chat.send_message(prompt_completo)
             return response.text
 
         except Exception as e:
-            # Se o Google mandar esperar (429), a gente espera 2 segundos e tenta o próximo
-            if "429" in str(e):
-                print(f"⏳ Google pediu tempo no {nome_modelo}. Tentando o próximo...", flush=True)
-                time.sleep(2)
+            erro_str = str(e)
+            if "429" in erro_str:
+                print(f"⏳ Quota excedida no {nome_modelo}. Aguardando 2s...", flush=True)
+                time.sleep(2) # Espera o castigo do Google passar
                 continue
             
-            print(f"⚠️ Erro no {nome_modelo}: {e}", flush=True)
+            print(f"⚠️ Erro no {nome_modelo}: {erro_str}", flush=True)
             continue
 
-    return "Estou com muitos atendimentos agora. Pode me chamar em 1 minuto?"
+    return "Nossos sistemas estão sobrecarregados. Tente novamente em 1 minuto."
+
+# ==================================================
+# 4. ROTAS E WEBHOOK
+# ==================================================
+def save_message(phone, role, text):
+    with app.app_context():
+        lead = Lead.query.filter_by(phone=phone).first()
+        if not lead:
+            lead = Lead(phone=phone)
+            db.session.add(lead)
+        
+        try:
+            history_list = json.loads(lead.history)
+        except:
+            history_list = []
+            
+        history_list.append({
+            "role": role, 
+            "text": text, 
+            "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
+        
+        lead.history = json.dumps(history_list)
+        lead.last_interaction = datetime.datetime.utcnow()
+        lead.status = "Em Conversa"
+        db.session.commit()
+
+# Rota de Login Simplificada
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        if request.form.get('username') == ADMIN_USER and request.form.get('password') == ADMIN_PASS:
+            session['logged_in'] = True
+            return redirect('/dashboard')
+    return "<form method='post'><input name='username' placeholder='user'><br><input type='password' name='password' placeholder='pass'><br><button>Login</button></form>"
+
+@app.route('/dashboard')
+def dashboard():
+    if 'logged_in' not in session: return redirect('/login')
+    leads = Lead.query.order_by(Lead.last_interaction.desc()).all()
+    # Tabela simples
+    rows = ""
+    for l in leads:
+        rows += f"<tr><td>{l.phone}</td><td>{l.status}</td><td><a href='https://wa.me/{l.phone}'>Abrir Whats</a></td></tr>"
+    return f"<table border='1' cellpadding='10'><thead><tr><th>Telefone</th><th>Status</th><th>Ação</th></tr></thead><tbody>{rows}</tbody></table>"
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -106,16 +169,23 @@ def webhook():
 
     if mensagem and phone:
         print(f"📩 RECEBIDO: {mensagem}", flush=True)
+        save_message(phone, "user", mensagem)
+        
         resposta = gerar_resposta_ia(phone, mensagem)
+        print(f"🤖 IA: {resposta}", flush=True)
+        save_message(phone, "model", resposta)
         
         url = f"https://api.z-api.io/instances/{Z_API_ID}/token/{Z_API_TOKEN}/send-text"
         headers = {"Client-Token": CLIENT_TOKEN, "Content-Type": "application/json"}
         payload = {"phone": phone, "message": resposta}
-        requests.post(url, json=payload, headers=headers)
+        
+        try:
+            requests.post(url, json=payload, headers=headers)
+        except Exception as e:
+            print(f"❌ ERRO Z-API: {e}", flush=True)
             
     return "ok", 200
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
-
