@@ -39,6 +39,7 @@ OBJETIVO: Apresentar a franquia, tirar dúvidas com base no Book 2025 e qualific
 ### REGRA DE ENCERRAMENTO:
 - **Lead Qualificado (Capital > 100k):** Convide para call com o Diretor.
 - **Lead Desqualificado:** Explique sobre o investimento necessário e encerre educadamente.
+- **Lead Desqualificado com pelo menos 50 mil:** Convide para call com o Diretor.
 """
 
 @app.route("/", methods=["GET"])
@@ -99,3 +100,4 @@ def webhook():
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
+
