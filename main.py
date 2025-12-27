@@ -14,7 +14,6 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 app = Flask(__name__)
 client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
-# Memória RAM (Reinicia com o servidor, mas destrava o deploy)
 chat_sessions = {}
 
 # --- CÉREBRO TREINADO COM O PDF MICROLINS 2025 ---
@@ -43,7 +42,7 @@ OBJETIVO: Apresentar a franquia, tirar dúvidas com base no Book 2025 e qualific
 """
 
 @app.route("/", methods=["GET"])
-def health(): return "Especialista Microlins (Lite) Ativo", 200
+def health(): return "Microlins Bot (Llama 3.3) Ativo", 200
 
 def gerar_resposta_ia(phone, mensagem_usuario):
     if not client: return "Erro: Chave Groq não configurada."
@@ -54,8 +53,9 @@ def gerar_resposta_ia(phone, mensagem_usuario):
     chat_sessions[phone].append({"role": "user", "content": mensagem_usuario})
 
     try:
+        # ATUALIZADO: Usando o modelo Llama 3.3 (Mais novo e suportado)
         completion = client.chat.completions.create(
-            model="llama-3.1-70b-versatile",
+            model="llama-3.3-70b-versatile",
             messages=chat_sessions[phone][-10:],
             temperature=0.3,
         )
@@ -64,7 +64,18 @@ def gerar_resposta_ia(phone, mensagem_usuario):
         return resposta
     except Exception as e:
         print(f"Erro IA: {e}")
-        return "Olá! Pode repetir por favor?"
+        # Fallback de segurança para o modelo menor se o 70b falhar
+        try:
+            completion = client.chat.completions.create(
+                model="llama-3.1-8b-instant",
+                messages=chat_sessions[phone][-10:],
+                temperature=0.3,
+            )
+            resposta = completion.choices[0].message.content
+            chat_sessions[phone].append({"role": "assistant", "content": resposta})
+            return resposta
+        except:
+            return "Olá! Pode repetir por favor?"
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -88,4 +99,3 @@ def webhook():
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
-
