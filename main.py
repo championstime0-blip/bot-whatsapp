@@ -13,32 +13,28 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 app = Flask(__name__)
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# Memória RAM para o histórico
+# Memória RAM para histórico
 chat_sessions = {}
 
-# PROCESSO DE SONDAGEM RIGOROSO
+# PROCESSO DE SONDAGEM RIGOROSO (As 5 Perguntas solicitadas)
 PROMPT_SISTEMA = """
 Você é o Pedro Lima, consultor de expansão Microlins. 
-OBJETIVO: Seguir este roteiro sem repetir perguntas que já constem no histórico.
+Siga este roteiro EXATAMENTE e NUNCA repita perguntas já respondidas.
 
-ROTEIRO DE SONDAGEM:
-1. ATUAÇÃO: "Legal Sr, e me fala uma coisa, o Sr trabalha ou atua em qual área aí na sua cidade?"
-2. PRAÇA: "Ah legal, e me outra coisa, e o negócio pretende montar é aí na sua cidade mesmo?"
-3. PRAZO: "E esse negócio, você pretende abrir nos próximos 3 meses ou é algo mais a médio ou longo prazo?"
-4. LUCRO: "E me fala uma coisa Sr, esse negócio, pra ser bom para o Sr, ele precisa dar quanto na última linha?"
-5. CAPITAL: "Legal Sr, para você ter uma ideia, a lucratividade está diretamente ao investimento. Qual valor você tem disponível para investir hoje?"
-
-REGRAS: 
-- Analise o histórico e pule o que já foi respondido. 
-- Apenas uma pergunta por vez.
+ROTEIRO:
+1º (ÁREA DE ATUAÇÃO) "Legal Sr, e me fala uma coisa, o Sr trabalha ou atua em qual área aí na sua cidade?"
+2º (PRAÇA DE INTERESSE) "Ah legal, e me outra coisa, e o negócio pretende montar é aí na sua cidade mesmo?"
+3º (PRAZO) "E esse negócio, você pretende abrir nos próximos 3 meses ou é algo mais a médio ou longo prazo? E o que seria médio ou longo prazo para o Sr?"
+4º (LUCRO) "E me fala uma coisa Sr, esse negócio, pra ser bom para o Sr, ele precisa dar quanto na última linha?"
+5º (CAPITAL) "Legal Sr, para você ter uma ideia, a lucratividade está diretamente ao investimento. Tem um monte de franquia dizendo que com apenas 10 mil o Sr vai lucrar 50. E isso não é uma verdade. Qual valor você tem disponível para investir hoje?"
 """
 
 @app.route("/", methods=["GET"])
 def health(): 
-    return "Bot Operacional (Gemini 2.0 Flash)", 200
+    return "Bot Online - Gemini 2.0 Flash", 200
 
 def gerar_resposta_ia(phone, mensagem_usuario):
-    # Usando o modelo estável que NÃO dá erro 404
+    # Modelo ESTÁVEL de 2025 que NÃO dá erro 404
     MODELO = "gemini-2.0-flash"
 
     if phone not in chat_sessions:
@@ -46,7 +42,7 @@ def gerar_resposta_ia(phone, mensagem_usuario):
 
     chat_sessions[phone].append({"role": "user", "content": mensagem_usuario})
     
-    # Prepara o histórico (últimas 6 mensagens para manter a conversa leve)
+    # Envia apenas as últimas 6 mensagens para economizar cota e evitar confusão
     contents = [
         types.Content(role=m["role"], parts=[types.Part.from_text(text=m["content"])]) 
         for m in chat_sessions[phone][-6:]
@@ -65,9 +61,9 @@ def gerar_resposta_ia(phone, mensagem_usuario):
         chat_sessions[phone].append({"role": "model", "content": resposta})
         return resposta
     except Exception as e:
-        print(f"Erro na API Gemini: {e}", flush=True)
-        # Fallback imediato se o 404 ou 429 persistir
-        return "Legal! E me diga uma coisa, você trabalha em qual área aí na sua cidade hoje?"
+        print(f"Erro IA ({MODELO}): {e}", flush=True)
+        # Fallback para manter o lead engajado se a API falhar
+        return "Entendi! E me diga uma coisa, você trabalha em qual área aí na sua cidade hoje?"
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -77,7 +73,7 @@ def webhook():
     phone = data.get("phone")
 
     if msg and phone:
-        print(f"📩 Mensagem recebida: {msg}", flush=True)
+        print(f"📩 Lead: {msg}", flush=True)
         resp = gerar_resposta_ia(phone, msg)
         
         requests.post(
@@ -85,6 +81,8 @@ def webhook():
             json={"phone": phone, "message": resp}, 
             headers={"Client-Token": CLIENT_TOKEN, "Content-Type": "application/json"}
         )
+        print(f"🤖 Pedro Lima: {resp}", flush=True)
+            
     return "ok", 200
 
 if __name__ == "__main__":
