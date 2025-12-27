@@ -6,7 +6,7 @@ from groq import Groq
 # --- CREDENCIAIS ATUALIZADAS (CONFORME SUA IMAGEM) ---
 Z_API_ID = "3EC502952818632B0E31C6B75FFFD411"
 Z_API_TOKEN = "43FB843CF98C6CD27D3E0E50"
-CLIENT_TOKEN = "Ff1119996b44848dbaf394270f9933163S" # Verifique se este token continua o mesmo no seu painel
+CLIENT_TOKEN = "Fecccd92e36ba4bc990f72fb8be200436S" # Verifique se este token continua o mesmo no seu painel
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 app = Flask(__name__)
@@ -68,3 +68,4 @@ def webhook():
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
+
